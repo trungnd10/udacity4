@@ -1,11 +1,11 @@
 import { TodosAccess } from './todosAcess'
-import { AttachmentUtils } from './attachmentUtils';
+// import { AttachmentUtils } from './attachmentUtils';
 import { TodoItem } from '../models/TodoItem'
 import { CreateTodoRequest } from '../requests/CreateTodoRequest'
 import { UpdateTodoRequest } from '../requests/UpdateTodoRequest'
-import { createLogger } from '../utils/logger'
+// import { createLogger } from '../utils/logger'
 import * as uuid from 'uuid'
-import * as createError from 'http-errors'
+// import * as createError from 'http-errors'
 import * as AWS from 'aws-sdk';
 import * as AWSXRay from 'aws-xray-sdk';
 
@@ -14,7 +14,8 @@ const XAWS = AWSXRay.captureAWS(AWS)
 const s3 = new XAWS.S3({
   signatureVersion: 'v4'
 })
-const bucketName = process.env.TODOS_S3_BUCKET
+// const bucketName = process.env.TODOS_S3_BUCKET
+const bucketName = process.env.ATTACHMENT_S3_BUCKET
 const urlExpiration: number = 300
 
 const todo = new TodosAccess()
@@ -54,6 +55,7 @@ export async function todoExists(todoId: string, userId: string) {
 }
 
 export async function getSignedUploadUrl(todoId: string, userId: string) {
+  console.log('bucket name:', bucketName)
   const signedUrl = s3.getSignedUrl('putObject', {
     Bucket: bucketName,
     Key: todoId,

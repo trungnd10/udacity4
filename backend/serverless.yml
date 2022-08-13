@@ -8,10 +8,14 @@ plugins:
   - serverless-plugin-tracing
   - serverless-reqvalidator-plugin
 
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+frameworkVersion: "2"
+
 provider:
   name: aws
   runtime: nodejs12.x
-  # lambdaHashingVersion: '20201221'
+  lambdaHashingVersion: 20201221
 
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-2'}
@@ -22,7 +26,30 @@ provider:
     lambda: true
     apiGateway: true
 
-  # Use these variables in the functions and resouorces section below. For example, 
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - xray:PutTraceSegments
+        - xray:PutTelemetryRecords
+      Resource:
+        - "*"
+  # you can add statements to the Lambda function's IAM Role here
+  #  iamRoleStatements:
+  #    - Effect: "Allow"
+  #      Action:
+  #        - "s3:ListBucket"
+  #      Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ] ]  }
+  #    - Effect: "Allow"
+  #      Action:
+  #        - "s3:PutObject"
+  #      Resource:
+  #        Fn::Join:
+  #          - ""
+  #          - - "arn:aws:s3:::"
+  #            - "Ref" : "ServerlessDeploymentBucket"
+  #            - "/*"
+
+  # Use these variables in the functions and resouorces section below. For example,
   # ${self:provider.environment.ATTACHMENT_S3_BUCKET}
   environment:
     TODOS_TABLE: todos-${self:provider.stage}
@@ -30,44 +57,45 @@ provider:
     ATTACHMENT_S3_BUCKET: serverless-c4-todo-images-${self:provider.stage}
     SIGNED_URL_EXPIRATION: 300
 
-  logs:
-    # Enable API Gateway logs
-    restApi: true
+  # logs:
+  #   # Enable API Gateway logs
+  #   restApi: true
 
-  # iam:
-  #   role:
-  #     statements:
-  #       - Effect: Allow
-  #         Action:
-  #           - xray:PutTelemetryRecords
-  #           - xray:PutTraceSegments
-  #         Resource: "*"
+# you can add packaging information here
+#package:
+#  include:
+#    - include-me.js
+#    - include-me-dir/**
+#  exclude:
+#    - exclude-me.js
+#    - exclude-me-dir/**
 
-# custom:
-#   documentation:
-#     api:
-#       info:
-#         version: '1.0.0'
-#         title: Todo API
-#         description: Todo app API
-#       tags:
-#         - name: Todos
-#           description: Todo Management
-#     models:
-#       - name: CreateTodoRequest
-#         contentType: "application/json"
-#         schema: ${file(src/models/create-todo-request.json)}
-#       - name: UpdateTodoRequest
-#         contentType: "application/json"
-#         schema: ${file(src/models/update-todo-request.json)}
+custom:
+  documentation:
+    api:
+      info:
+        version: '1.0.0'
+        title: Todo API
+        description: Todo app API
+      tags:
+        - name: Todos
+          description: Todo Management
+    models:
+      - name: CreateTodoRequest
+        contentType: "application/json"
+        schema: ${file(src/models/create-todo-request.json)}
+      - name: UpdateTodoRequest
+        contentType: "application/json"
+        schema: ${file(src/models/update-todo-request.json)}
 
 functions:
+  hello:
+    # handler: handler.hello
+    handler: src/lambda/auth/auth0Authorizer.handler
 
   Auth:
     handler: src/lambda/auth/auth0Authorizer.handler
 
-  # TODO: Configure this function - 
-  # Provide iamRoleStatements property for performing Actions on DynamoDB
   GetTodos:
     handler: src/lambda/http/getTodos.handler
     iamRoleStatementsName: get-todo-role
@@ -82,13 +110,15 @@ functions:
           method: get
           path: todos
           cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
+            # resultTtlInSeconds: 0
+            # identitySource: $request.header.authorization
+            # # identitySource: method.request.header.Authorization
+            # # identityValidationExpression: someRegex
+            # type: token
           reqValidatorName: RequestBodyValidator
 
-  # TODO: Configure this function - 
-  # Provide iamRoleStatements property. Decide the Actions and AWS Resource. 
-  # To refer to an AWS resource defined in the "Resources" section, you can use "Resource: !GetAtt <resource-name>.Arn"
-  # To validate incoming HTTP requests, we have provided the request schemas in function definition below. 
   CreateTodo:
     handler: src/lambda/http/createTodo.handler
     iamRoleStatementsName: create-todo-role
@@ -101,14 +131,13 @@ functions:
           method: post
           path: todos
           cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
           # request:
           #   schemas:
           #     application/json: ${file(models/create-todo-model.json)}
           reqValidatorName: RequestBodyValidator
 
-  # TODO: Configure this function
-  # Provide property for setting up CORS, Authorizer, iamRoleStatements, and request schemas
   UpdateTodo:
     handler: src/lambda/http/updateTodo.handler
     iamRoleStatementsName: update-todo-role
@@ -123,7 +152,8 @@ functions:
           method: patch
           path: todos/{todoId}
           cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
           reqValidatorName: RequestBodyValidator
           # documentation:
           #   summary: Update a Todo
@@ -134,7 +164,8 @@ functions:
           method: put
           path: todos/{todoId}
           cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
           reqValidatorName: RequestBodyValidator
           # documentation:
           #   summary: Update a Todo
@@ -142,8 +173,6 @@ functions:
           #   requestModels:
           #     'application/json': UpdateTodoRequest
 
-  # TODO: Configure this function
-  # Provide property for setting up CORS, Authorizer, iamRoleStatements
   DeleteTodo:
     handler: src/lambda/http/deleteTodo.handler
     iamRoleStatementsName: delete-todo-role
@@ -158,11 +187,10 @@ functions:
           method: delete
           path: todos/{todoId}
           cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
           reqValidatorName: RequestBodyValidator
 
-  # TODO: Configure this function
-  # Provide property for setting up CORS, Authorizer, iamRoleStatements
   GenerateUploadUrl:
     handler: src/lambda/http/generateUploadUrl.handler
     iamRoleStatementsName: todo-upload-role
@@ -180,14 +208,55 @@ functions:
           method: post
           path: todos/{todoId}/attachment
           cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
           reqValidatorName: RequestBodyValidator
+
+#    The following are a few example events you can configure
+#    NOTE: Please make sure to change your handler code to work with those events
+#    Check the event documentation for details
+#    events:
+#      - httpApi:
+#          path: /users/create
+#          method: get
+#      - websocket: $connect
+#      - s3: ${env:BUCKET}
+#      - schedule: rate(10 minutes)
+#      - sns: greeter-topic
+#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
+#      - alexaSkill: amzn1.ask.skill.xx-xx-xx-xx
+#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
+#      - iot:
+#          sql: "SELECT * FROM 'some_topic'"
+#      - cloudwatchEvent:
+#          event:
+#            source:
+#              - "aws.ec2"
+#            detail-type:
+#              - "EC2 Instance State-change Notification"
+#            detail:
+#              state:
+#                - pending
+#      - cloudwatchLog: '/aws/lambda/hello'
+#      - cognitoUserPool:
+#          pool: MyUserPool
+#          trigger: PreSignUp
+#      - alb:
+#          listenerArn: arn:aws:elasticloadbalancing:us-east-1:XXXXXX:listener/app/my-load-balancer/50dc6c495c0c9188/
+#          priority: 1
+#          conditions:
+#            host: example.com
+#            path: /hello
+
+#    Define function environment variables here
+#    environment:
+#      variable2: value2
 
 resources:
   Resources:
     # Add necessary AWS resources. You will need at least the following AWS resources
     # TODO: Fill the properties
-    # Feel free to change the names as you like. 
+    # Feel free to change the names as you like.
 
     # TODO: Create a DynamoDB table with local secondary index and a composite key
     # TodosTable:
@@ -234,26 +303,26 @@ resources:
     #         KeyType: RANGE
     #     BillingMode: PAY_PER_REQUEST
     #     TableName: ${self:provider.environment.TODOS_TABLE}
-    # RequestBodyValidator:
-    #   Type: AWS::ApiGateway::RequestValidator
-    #   Properties:
-    #     Name: 'request-body-validator'
-    #     RestApiId:
-    #       Ref: ApiGatewayRestApi
-    #     ValidateRequestBody: true
-    #     ValidateRequestParameters: false
-    # GatewayResponseDefault4XX:
-    #   Type: AWS::ApiGateway::GatewayResponse
-    #   Properties:
-    #     ResponseParameters:
-    #       gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-    #       gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    #       gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
-    #     ResponseType: DEFAULT_4XX
-    #     RestApiId:
-    #       Ref: ApiGatewayRestApi
+    RequestBodyValidator:
+      Type: AWS::ApiGateway::RequestValidator
+      Properties:
+        Name: "request-body-validator"
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ValidateRequestBody: true
+        ValidateRequestParameters: false
+    GatewayResponseDefault4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
 
-    # TODO: Complete the bucket properties below. 
+    # TODO: Complete the bucket properties below.
     # Do not forget to add the CorsConfiguration propoerty
     AttachmentsBucket:
       Type: AWS::S3::Bucket
@@ -261,11 +330,10 @@ resources:
         BucketName: ${self:provider.environment.ATTACHMENT_S3_BUCKET}
         CorsConfiguration:
           CorsRules:
-            -
-              AllowedOrigins:
-                - '*'
+            - AllowedOrigins:
+                - "*"
               AllowedHeaders:
-                - '*'
+                - "*"
               AllowedMethods:
                 - GET
                 - PUT
@@ -285,7 +353,7 @@ resources:
           Statement:
             - Sid: PublicReadForGetBucketObjects
               Effect: Allow
-              Principal: '*'
-              Action: 's3:GetObject'
-              Resource: 'arn:aws:s3:::${self:provider.environment.ATTACHMENT_S3_BUCKET}/*'
+              Principal: "*"
+              Action: "s3:GetObject"
+              Resource: "arn:aws:s3:::${self:provider.environment.ATTACHMENT_S3_BUCKET}/*"
         Bucket: !Ref AttachmentsBucket
